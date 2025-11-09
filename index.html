@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌙 Top 10 Grid Bots - Dashboard Dark Mode</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        /* Base Dark Mode */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #121212; /* Sfondo molto scuro */
+            color: #E0E0E0; /* Testo chiaro */
+            padding: 20px; 
+        }
+        .container { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            background-color: #1E1E1E; /* Sfondo contenitore */
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4); 
+        }
+        h1 { 
+            color: #4CAF50; /* Verde brillante per il titolo */
+            border-bottom: 2px solid #4CAF50; 
+            padding-bottom: 15px; 
+            margin-bottom: 20px;
+        }
+        p.timestamp { 
+            font-size: 0.9em; 
+            color: #A0A0A0; 
+            margin-top: -10px; 
+        }
+
+        /* Stile Tabella */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 25px; 
+            overflow: hidden; /* Nasconde bordi non necessari */
+        }
+        th, td { 
+            padding: 14px 18px; 
+            text-align: left; 
+            border-bottom: 1px solid #333333; /* Linee divisorie più scure */
+        }
+        th { 
+            background-color: #333333; 
+            color: #FFFFFF; 
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        tr:hover { 
+            background-color: #282828; /* Evidenziazione al passaggio del mouse */
+        }
+        
+        /* Stile per i dati */
+        td:nth-child(2) { font-weight: bold; color: #64FFDA; } /* Colora Punteggio Rank */
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏆 Classifica Top 10 Grid Bots Binance</h1>
+        <p id="timestamp">Caricamento dati...</p>
+        
+        <table id="ranking-table">
+            <thead>
+                <tr>
+                    <th>Coppia</th>
+                    <th>Punteggio Rank</th>
+                    <th>Griglia %</th>
+                    <th>Range Min</th>
+                    <th>Range Max</th>
+                    <th>N° Griglie</th>
+                    <th>Prezzo Attuale</th>
+                </tr>
+            </thead>
+            <tbody id="ranking-body">
+                <tr><td colspan="7">Tentativo di connessione a Firebase...</td></tr>
+            </tbody>
+        </table>
+
+        <p style="margin-top: 30px; font-size: 0.8em; color: #666;">I dati sono generati automaticamente dal NUC e dallo Strategy Analyzer (Cron Job).</p>
+    </div>
+
+    <script>
+        // 2. CONFIGURAZIONE CREDENZIALI FIREBASE PUBBLICHE
+        // INSERIRE I VALORI OTTENUTI DOPO LA REGISTRAZIONE DELL'APP WEB!
+        const firebaseConfig = {
+            apiKey: "INSERISCI_LA_TUA_API_KEY_WEB_QUI", 
+            authDomain: "TUA-APP-ID.firebaseapp.com",
+            projectId: "TUA-APP-ID"
+            // Lascia vuoti gli altri campi
+        };
+
+        // Inizializzazione
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        function loadRanking() {
+            db.collection("TOP-10-GRID-BOTS").doc("Classification")
+              .get()
+              .then((doc) => {
+                const body = document.getElementById('ranking-body');
+                body.innerHTML = ''; // Pulisce
+
+                if (doc.exists) {
+                    const data = doc.data();
+                    const ranking = data.top_10_pairs;
+                    
+                    // Formattazione del Timestamp UTC
+                    const timestampUTC = new Date(data.timestamp);
+                    const formattedTime = timestampUTC.toLocaleString('it-IT', { 
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        timeZone: 'UTC' 
+                    }) + ' UTC';
+
+                    document.getElementById('timestamp').textContent = 'Analisi generata il: ' + formattedTime;
+
+                    ranking.forEach(pair => {
+                        const row = body.insertRow();
+                        row.insertCell().textContent = pair.symbol;
+                        row.insertCell().textContent = parseFloat(pair.rank_score).toFixed(2);
+                        row.insertCell().textContent = pair.best_step_pct;
+                        row.insertCell().textContent = parseFloat(pair.range_low).toFixed(6);
+                        row.insertCell().textContent = parseFloat(pair.range_high).toFixed(6);
+                        row.insertCell().textContent = pair.num_grids;
+                        row.insertCell().textContent = parseFloat(pair.current_price).toFixed(6);
+                    });
+                } else {
+                    body.innerHTML = '<tr><td colspan="7">Nessuna classifica trovata. Attendere la prima esecuzione del NUC (00:00 UTC) o verificare i log.</td></tr>';
+                }
+              })
+              .catch(error => {
+                console.error("Errore lettura dati:", error);
+                document.getElementById('ranking-body').innerHTML = '<tr><td colspan="7">Errore di connessione Firebase. Controllare la Web API Key e le regole di sicurezza.</td></tr>';
+              });
+        }
+        
+        // Carica i dati all'avvio e aggiorna ogni 30 minuti (opzionale)
+        loadRanking();
+        setInterval(loadRanking, 1800000); // 30 minuti
+    </script>
+</body>
+</html>
