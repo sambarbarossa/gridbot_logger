@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏆 Classifica Grid Bot 🤖</title>
+    <title>🏆 Classifica Grid Bot Aggiornata 🤖</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script> 
@@ -13,8 +13,9 @@
         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }
         h1 { color: #333; text-align: center; }
         p { text-align: center; color: #555; }
-        table { width: 90%; margin: 20px auto; border-collapse: collapse; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-color: white; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        table { width: 100%; margin: 20px auto; border-collapse: collapse; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-color: white; font-size: 0.9em; }
+        th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #ddd; }
+        th:nth-child(2), td:nth-child(2) { text-align: left; } /* Allinea a sinistra Coin */
         th { background-color: #4CAF50; color: white; }
         tr:hover { background-color: #f1f1f1; }
         .score-col { font-weight: bold; color: #007bff; }
@@ -24,7 +25,7 @@
 <body>
 
     <h1>🏆 Classifica Grid Bot Aggiornata 🤖</h1>
-    <p>Analisi in tempo reale delle 10 migliori coin per volatilità e ranging.</p>
+    <p>Analisi in tempo reale delle coin ideali per ranging (target profitto lordo: 0.50%).</p>
     <p id="last-update"></p>
     <div id="loading">Caricamento classifica da Firestore...</div>
     
@@ -34,10 +35,13 @@
                 <th>Pos.</th>
                 <th>Coin</th>
                 <th>Punteggio Grid</th>
-                <th>Prezzo ($)</th>
                 <th>RSI (14)</th>
                 <th>BB Width (%)</th>
-                <th>Dist. da MA (%)</th>
+                <th>Griglie</th>
+                <th>Step %</th>
+                <th>Range Min ($)</th>
+                <th>Range Max ($)</th>
+                <th>Prezzo Ing. ($)</th>
             </tr>
         </thead>
         <tbody>
@@ -45,8 +49,8 @@
     </table>
 
     <script>
-        // *** 2. CONFIGURA IL TUO PROGETTO FIREBASE QUI ***
-        // Queste chiavi sono necessarie per l'accesso client (browser)
+        // *** CONFIGURA IL TUO PROGETTO FIREBASE QUI ***
+        // Inserisci i tuoi valori esatti
         const firebaseConfig = {
             apiKey: "AIzaSyAVhe22RP94NQyVvw0qpW1ApV8pEpbqarQ", // Chiave API per l'accesso pubblico del client
             authDomain: "bot-pionex.firebaseapp.com",
@@ -56,21 +60,16 @@
             appId: "1:1077520925615:web:10bb410e6b2829a73c655a"
         };
         
-        // Inizializza Firebase
         firebase.initializeApp(firebaseConfig);
-
-        // Riferimento al database Firestore
         const db = firebase.firestore(); 
 
-        function updateTable(rankingArray) {
+        function updateTable(rankingArray, updated_at) {
             const tableBody = document.querySelector('#ranking-table tbody');
             const loading = document.getElementById('loading');
             
-            // Pulisci la tabella
             tableBody.innerHTML = ''; 
 
             if (rankingArray && rankingArray.length > 0) {
-                // Ordina per punteggio (il tuo script Python lo fa già, ma è una sicurezza)
                 rankingArray.sort((a, b) => b.score - a.score); 
 
                 rankingArray.forEach((item, index) => {
@@ -79,12 +78,21 @@
                         <td>${index + 1}</td>
                         <td class="score-col">${item.symbol}/USDT</td>
                         <td class="score-col">${item.score.toFixed(2)}</td>
-                        <td>${item.last_price.toFixed(4)}</td>
                         <td>${item.RSI.toFixed(2)}</td>
                         <td>${item.BB_Width_Pct.toFixed(2)}</td>
-                        <td>${item.dist_from_MA_Pct.toFixed(2)}</td>
+                        
+                        <td style="font-weight: bold;">${item.grids}</td>
+                        <td>${item.grid_step_pct.toFixed(4)}</td>
+                        <td>${item.range_min.toFixed(4)}</td>
+                        <td>${item.range_max.toFixed(4)}</td>
+                        <td style="font-weight: bold;">${item.entry_price.toFixed(4)}</td>
                     `;
                 });
+                
+                // Aggiorna data/ora
+                if(updated_at) {
+                    document.getElementById('last-update').textContent = 'Ultimo aggiornamento: ' + new Date(updated_at).toLocaleString('it-IT');
+                }
                 
                 loading.style.display = 'none';
                 document.getElementById('ranking-table').style.display = 'table';
@@ -97,27 +105,22 @@
         function loadRanking() {
             const loading = document.getElementById('loading');
             
-            // 3. RIFERIMENTO AL PERCORSO FIRESTORE ESATTO: TOP-10-GRID-BOTS/classifica_attuale
+            // RIFERIMENTO AL PERCORSO FIRESTORE ESATTO
             const rankingDocRef = db.collection('TOP-10-GRID-BOTS').doc('classifica_attuale');
             
-            // Ascolta i cambiamenti in tempo reale (onSnapshot) o semplicemente leggi (get)
             rankingDocRef.onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
-                    const rankingArray = data.ranking; // L'array di classifica è nel campo 'ranking'
+                    const rankingArray = data.ranking; 
+                    const updated_at = data.updated_at;
                     
-                    // Aggiorna l'orario
-                    if(data.updated_at) {
-                         document.getElementById('last-update').textContent = 'Ultimo aggiornamento: ' + new Date(data.updated_at).toLocaleString('it-IT');
-                    }
-                    
-                    updateTable(rankingArray);
+                    updateTable(rankingArray, updated_at);
                 } else {
                     loading.textContent = "Nessun documento classifica trovato nel percorso Firestore. Controllare le regole e il percorso.";
                 }
             }, (error) => {
                 console.error("Errore di lettura Firestore: ", error);
-                loading.textContent = 'Errore nel caricamento dei dati Firestore.';
+                loading.textContent = 'Errore nel caricamento dei dati Firestore. Controlla la console per i dettagli.';
             });
         }
 
