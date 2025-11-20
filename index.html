@@ -3,54 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏆 Classifica Grid Bot Aggiornata 🤖</title>
+    <title>🏆 Classifica Grid Bot Strategica 🤖</title>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script> 
     
     <style>
-        /* CSS Base per la tabella */
         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }
         h1 { color: #333; text-align: center; }
+        .section-header { text-align: center; color: #007bff; font-size: 1.5em; margin-top: 40px; }
         p { text-align: center; color: #555; }
-        table { width: 100%; margin: 20px auto; border-collapse: collapse; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-color: white; font-size: 0.9em; }
+        table { width: 95%; margin: 10px auto; border-collapse: collapse; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-color: white; font-size: 0.85em; }
         th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #ddd; }
-        th:nth-child(2), td:nth-child(2) { text-align: left; } /* Allinea a sinistra Coin */
+        th:nth-child(2), td:nth-child(2) { text-align: left; }
         th { background-color: #4CAF50; color: white; }
-        tr:hover { background-color: #f1f1f1; }
+        .long-header th { background-color: #28a745; } /* Verde per Long */
+        .ranging-header th { background-color: #ffc107; color: #333; } /* Giallo per Ranging */
         .score-col { font-weight: bold; color: #007bff; }
+        .long-score { color: #28a745; font-weight: bold; }
         #loading { text-align: center; padding: 20px; color: #555; }
     </style>
 </head>
 <body>
 
-    <h1>🏆 Classifica Grid Bot Aggiornata 🤖</h1>
-    <p>Analisi in tempo reale delle coin ideali per ranging (target profitto lordo: 0.50%).</p>
+    <h1>🏆 Classifica Grid Bot Strategica 🤖</h1>
+    <p>Analisi basata su dati 1H (Target profitto lordo: 0.30% per griglia).</p>
     <p id="last-update"></p>
-    <div id="loading">Caricamento classifica da Firestore...</div>
+    <div id="loading">Caricamento classifiche da Firestore...</div>
     
-    <table id="ranking-table" style="display: none;">
-        <thead>
-            <tr>
-                <th>Pos.</th>
-                <th>Coin</th>
-                <th>Punteggio Grid</th>
-                <th>RSI (14)</th>
-                <th>BB Width (%)</th>
-                <th>Griglie</th>
-                <th>Step %</th>
-                <th>Range Min ($)</th>
-                <th>Range Max ($)</th>
-                <th>Prezzo Ing. ($)</th>
-            </tr>
-        </thead>
-        <tbody>
-            </tbody>
-    </table>
+    <div id="long-ranking-container" style="display: none;">
+        <h2 class="section-header">🟢 CLASSIFICA 1: LONG GRID BOT (Trend Rialzista)</h2>
+        <table id="long-ranking-table"></table>
+    </div>
+
+    <div id="ranging-ranking-container" style="display: none;">
+        <h2 class="section-header">🟡 CLASSIFICA 2: RANGING GRID BOT (Neutrale / Laterale)</h2>
+        <table id="ranging-ranking-table"></table>
+    </div>
+
 
     <script>
         // *** CONFIGURA IL TUO PROGETTO FIREBASE QUI ***
-        // Inserisci i tuoi valori esatti
         const firebaseConfig = {
             apiKey: "AIzaSyAVhe22RP94NQyVvw0qpW1ApV8pEpbqarQ", // Chiave API per l'accesso pubblico del client
             authDomain: "bot-pionex.firebaseapp.com",
@@ -63,64 +56,75 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore(); 
 
-        function updateTable(rankingArray, updated_at) {
-            const tableBody = document.querySelector('#ranking-table tbody');
-            const loading = document.getElementById('loading');
+        // Funzione per generare l'HTML della tabella
+        function renderTable(rankingArray, tableId, scoreType) {
+            const table = document.getElementById(tableId);
+            const isLong = (scoreType === 'score_long');
             
-            tableBody.innerHTML = ''; 
+            // Intestazione
+            table.innerHTML = `
+                <thead class="${isLong ? 'long-header' : 'ranging-header'}">
+                    <tr>
+                        <th>Pos.</th>
+                        <th>Coin</th>
+                        <th>Score ${isLong ? 'Long' : 'Ranging'}</th>
+                        <th>Dist. da MA (%)</th>
+                        <th>Griglie</th>
+                        <th>Step %</th>
+                        <th>BB Width (%)</th>
+                        <th>Range Min ($)</th>
+                        <th>Range Max ($)</th>
+                        <th>Prezzo Ing. ($)</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            `;
+            
+            const tableBody = table.querySelector('tbody');
 
-            if (rankingArray && rankingArray.length > 0) {
-                rankingArray.sort((a, b) => b.score - a.score); 
-
-                rankingArray.forEach((item, index) => {
-                    const row = tableBody.insertRow();
-                    row.innerHTML = `
-                        <td>${index + 1}</td>
-                        <td class="score-col">${item.symbol}/USDT</td>
-                        <td class="score-col">${item.score.toFixed(2)}</td>
-                        <td>${item.RSI.toFixed(2)}</td>
-                        <td>${item.BB_Width_Pct.toFixed(2)}</td>
-                        
-                        <td style="font-weight: bold;">${item.grids}</td>
-                        <td>${item.grid_step_pct.toFixed(4)}</td>
-                        <td>${item.range_min.toFixed(4)}</td>
-                        <td>${item.range_max.toFixed(4)}</td>
-                        <td style="font-weight: bold;">${item.entry_price.toFixed(4)}</td>
-                    `;
-                });
+            rankingArray.forEach((item, index) => {
+                const row = tableBody.insertRow();
+                const scoreClass = isLong ? 'long-score' : 'score-col';
                 
-                // Aggiorna data/ora
-                if(updated_at) {
-                    document.getElementById('last-update').textContent = 'Ultimo aggiornamento: ' + new Date(updated_at).toLocaleString('it-IT');
-                }
-                
-                loading.style.display = 'none';
-                document.getElementById('ranking-table').style.display = 'table';
-
-            } else {
-                loading.textContent = 'Nessun dato di classifica disponibile. Eseguire Strategy Analyzer.';
-            }
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td class="${scoreClass}">${item.symbol}/USDT</td>
+                    <td class="${scoreClass}">${item[scoreType].toFixed(2)}</td>
+                    <td>${item.dist_from_MA_pct.toFixed(2)}</td>
+                    <td style="font-weight: bold;">${item.grids}</td>
+                    <td>${item.grid_step_pct.toFixed(4)}</td>
+                    <td>${item.BB_Width_Pct.toFixed(2)}</td>
+                    <td>${item.range_min.toFixed(4)}</td>
+                    <td>${item.range_max.toFixed(4)}</td>
+                    <td style="font-weight: bold;">${item.entry_price.toFixed(4)}</td>
+                `;
+            });
         }
         
+        // Funzione principale per caricare entrambi i documenti
         function loadRanking() {
             const loading = document.getElementById('loading');
             
-            // RIFERIMENTO AL PERCORSO FIRESTORE ESATTO
-            const rankingDocRef = db.collection('TOP-10-GRID-BOTS').doc('classifica_attuale');
-            
-            rankingDocRef.onSnapshot((doc) => {
+            // 1. CARICA CLASSIFICA LONG
+            db.collection('TOP-10-GRID-BOTS').doc('classifica_long').onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
-                    const rankingArray = data.ranking; 
-                    const updated_at = data.updated_at;
+                    renderTable(data.ranking, 'long-ranking-table', 'score_long');
+                    document.getElementById('long-ranking-container').style.display = 'block';
                     
-                    updateTable(rankingArray, updated_at);
-                } else {
-                    loading.textContent = "Nessun documento classifica trovato nel percorso Firestore. Controllare le regole e il percorso.";
+                    // Aggiorna l'orario una sola volta
+                    document.getElementById('last-update').textContent = 'Ultimo aggiornamento: ' + new Date(data.updated_at).toLocaleString('it-IT');
                 }
-            }, (error) => {
-                console.error("Errore di lettura Firestore: ", error);
-                loading.textContent = 'Errore nel caricamento dei dati Firestore. Controlla la console per i dettagli.';
+                loading.style.display = 'none';
+            });
+            
+            // 2. CARICA CLASSIFICA RANGING
+            db.collection('TOP-10-GRID-BOTS').doc('classifica_ranging').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    renderTable(data.ranking, 'ranging-ranking-table', 'score_ranging');
+                    document.getElementById('ranging-ranking-container').style.display = 'block';
+                }
             });
         }
 
