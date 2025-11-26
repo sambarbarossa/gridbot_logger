@@ -11,33 +11,40 @@
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }
         h1 { color: #333; text-align: center; }
-        .section-header { text-align: center; color: #007bff; font-size: 1.5em; margin-top: 40px; }
+        .section-header { text-align: center; font-size: 1.5em; margin-top: 40px; }
         p { text-align: center; color: #555; }
         table { width: 95%; margin: 10px auto; border-collapse: collapse; box-shadow: 0 4px 8px rgba(0,0,0,0.1); background-color: white; font-size: 0.85em; }
         th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid #ddd; }
         th:nth-child(2), td:nth-child(2) { text-align: left; }
-        th { background-color: #4CAF50; color: white; }
+        th { color: white; }
+        .short-header th { background-color: #dc3545; } /* Rosso per Short */
         .long-header th { background-color: #28a745; } /* Verde per Long */
         .ranging-header th { background-color: #ffc107; color: #333; } /* Giallo per Ranging */
-        .score-col { font-weight: bold; color: #007bff; }
-        .long-score { color: #28a745; font-weight: bold; }
+        .score-col { font-weight: bold; }
+        .score-short { color: #dc3545; font-weight: bold; }
+        .score-long { color: #28a745; font-weight: bold; }
         #loading { text-align: center; padding: 20px; color: #555; }
     </style>
 </head>
 <body>
 
-    <h1>🏆 Classifica Grid Bot Strategica 🤖</h1>
+    <h1>🏆 Classifica Grid Bot Strategica Aggiornata 🤖</h1>
     <p>Analisi basata su dati 1H (Target profitto lordo: 0.30% per griglia).</p>
     <p id="last-update"></p>
     <div id="loading">Caricamento classifiche da Firestore...</div>
     
+    <div id="short-ranking-container" style="display: none;">
+        <h2 class="section-header">🔴 CLASSIFICA 1: SHORT GRID BOT (Trend Ribassista)</h2>
+        <table id="short-ranking-table"></table>
+    </div>
+
     <div id="long-ranking-container" style="display: none;">
-        <h2 class="section-header">🟢 CLASSIFICA 1: LONG GRID BOT (Trend Rialzista)</h2>
+        <h2 class="section-header">🟢 CLASSIFICA 2: LONG GRID BOT (Trend Rialzista)</h2>
         <table id="long-ranking-table"></table>
     </div>
 
     <div id="ranging-ranking-container" style="display: none;">
-        <h2 class="section-header">🟡 CLASSIFICA 2: RANGING GRID BOT (Neutrale / Laterale)</h2>
+        <h2 class="section-header">🟡 CLASSIFICA 3: RANGING GRID BOT (Neutrale / Laterale)</h2>
         <table id="ranging-ranking-table"></table>
     </div>
 
@@ -52,22 +59,21 @@
             messagingSenderId: "1077520925615",
             appId: "1:1077520925615:web:10bb410e6b2829a73c655a"
         };
-        
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore(); 
 
-        // Funzione per generare l'HTML della tabella
-        function renderTable(rankingArray, tableId, scoreType) {
+        // Funzione helper per creare le righe della tabella
+        function renderTable(rankingArray, tableId, scoreType, headerClass) {
             const table = document.getElementById(tableId);
-            const isLong = (scoreType === 'score_long');
-            
+            const scoreClass = 'score-' + scoreType.split('_')[1];
+
             // Intestazione
             table.innerHTML = `
-                <thead class="${isLong ? 'long-header' : 'ranging-header'}">
+                <thead class="${headerClass}">
                     <tr>
                         <th>Pos.</th>
                         <th>Coin</th>
-                        <th>Score ${isLong ? 'Long' : 'Ranging'}</th>
+                        <th>Score ${scoreType.split('_')[1].toUpperCase()}</th>
                         <th>Dist. da MA (%)</th>
                         <th>Griglie</th>
                         <th>Step %</th>
@@ -84,7 +90,6 @@
 
             rankingArray.forEach((item, index) => {
                 const row = tableBody.insertRow();
-                const scoreClass = isLong ? 'long-score' : 'score-col';
                 
                 row.innerHTML = `
                     <td>${index + 1}</td>
@@ -101,30 +106,34 @@
             });
         }
         
-        // Funzione principale per caricare entrambi i documenti
+        // Funzione principale per caricare tutti i documenti
         function loadRanking() {
             const loading = document.getElementById('loading');
             
-            // 1. CARICA CLASSIFICA LONG
-            db.collection('TOP-10-GRID-BOTS').doc('classifica_long').onSnapshot((doc) => {
-                if (doc.exists) {
-                    const data = doc.data();
-                    renderTable(data.ranking, 'long-ranking-table', 'score_long');
-                    document.getElementById('long-ranking-container').style.display = 'block';
-                    
-                    // Aggiorna l'orario una sola volta
-                    document.getElementById('last-update').textContent = 'Ultimo aggiornamento: ' + new Date(data.updated_at).toLocaleString('it-IT');
-                }
-                loading.style.display = 'none';
-            });
-            
-            // 2. CARICA CLASSIFICA RANGING
-            db.collection('TOP-10-GRID-BOTS').doc('classifica_ranging').onSnapshot((doc) => {
-                if (doc.exists) {
-                    const data = doc.data();
-                    renderTable(data.ranking, 'ranging-ranking-table', 'score_ranging');
-                    document.getElementById('ranging-ranking-container').style.display = 'block';
-                }
+            // Definizioni
+            const collections = [
+                { id: 'classifica_short', tableId: 'short-ranking-table', scoreType: 'score_short', headerClass: 'short-header', containerId: 'short-ranking-container' },
+                { id: 'classifica_long', tableId: 'long-ranking-table', scoreType: 'score_long', headerClass: 'long-header', containerId: 'long-ranking-container' },
+                { id: 'classifica_ranging', tableId: 'ranging-ranking-table', scoreType: 'score_ranging', headerClass: 'ranging-header', containerId: 'ranging-ranking-container' }
+            ];
+
+            collections.forEach((col, index) => {
+                db.collection('TOP-10-GRID-BOTS').doc(col.id).onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        
+                        renderTable(data.ranking, col.tableId, col.scoreType, col.headerClass);
+                        document.getElementById(col.containerId).style.display = 'block';
+
+                        // Aggiorna l'orario solo dalla prima classifica (Short)
+                        if (index === 0) {
+                            document.getElementById('last-update').textContent = 'Ultimo aggiornamento: ' + new Date(data.updated_at).toLocaleString('it-IT');
+                        }
+                    }
+                    loading.style.display = 'none';
+                }, (error) => {
+                     console.error(`Errore di lettura Firestore per ${col.id}: `, error);
+                });
             });
         }
 
